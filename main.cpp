@@ -9,15 +9,7 @@
 
 using namespace std;
 
-
-
-
-
-
 int main() {
-    // Mostrar el directorio actual
-    cout << "Directorio actual: " << std::filesystem::current_path() << endl;
-
     string rutaArchivo = "../datos_prueba.csv";
 
     // Obtener tamaño del archivo
