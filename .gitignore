@@ -2,7 +2,6 @@ build/
 Compañeros/
 *.csv
 *.dat
-*.txt
 *.exe
 *.zip
 prueba.cpp

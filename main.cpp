@@ -441,5 +441,6 @@ void leer_csv(string rutaArchivo){
 int main() {
     string rutaArchivo = "E:/Proyectos/ProyectoParalelo/datos_prueba.csv";
     leer_csv(rutaArchivo);
+    system("pause");
     return 0;
 }
