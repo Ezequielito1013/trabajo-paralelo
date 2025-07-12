@@ -2,33 +2,44 @@
 #include <string>
 #include <fstream>
 #include <filesystem>
-#include <thread>
 #include <vector>
 #include <map>
-#include <mutex>
 #include <ctime>
 #include <iomanip>
 #include <chrono>
 #include <cmath>
 #include <algorithm>
+#include <omp.h>   
 
 using namespace std;
 
-// Estructura para almacenar las estadísticas
 struct Estadisticas
 {
     vector<int> Estrato={0,0,0,0,0,0,0,0,0,0};
     float total=0;
     map<pair<string,string>,vector<int>> Edades;
+    map<string,int> viajes;
+    void merge(const Estadisticas& other) {
+        for (int i = 0; i < 10; ++i) {
+            Estrato[i] += other.Estrato[i];
+        }
+
+        for (const auto& entry : other.Edades) {
+            Edades[entry.first].insert(Edades[entry.first].end(),
+                                         entry.second.begin(), entry.second.end());
+        }
+        for (const auto& entry : other.viajes) {
+            viajes[entry.first] += entry.second;
+        }
+    }
 };
 
 vector<int> Hoy;
-mutex Bloqueo;
 
-/*Funciones para mostrar el menú y procesar opciones*/
 void linea_separadora(){
     cout<<"--------------------------------------------------\n";
 }
+
 void mostrar_menu(Estadisticas Resultado){
     cout<<fixed<<setprecision(2);
     
@@ -50,12 +61,13 @@ void mostrar_menu(Estadisticas Resultado){
     linea_separadora();
     float dependencia = 0;
     float trabajadores = 0;
-    vector<int> edad={0,0,0,0,0,0,0,0,0,0};
+    vector<float> edad={0,0,0,0,0,0,0,0,0,0};
+    vector<pair<string,int>> pares;
+    int j = 0;
     switch (numero)
     {
     case 1:
         cout<<"Presionaste el numero uno\n";
-        //respuesta 1 y 2
         for(int i=0; i<10;i++)
             cout<<Resultado.Estrato[i]<<" personas pertenecen al estrato social "<<i<<endl;
         goto regresar;
@@ -68,7 +80,6 @@ void mostrar_menu(Estadisticas Resultado){
         break;
     case 3:
         cout<<"Presionaste el numero tres\n";
-        //respuesta 3,4,5
 
         for (const auto& combinacion : Resultado.Edades)
         {
@@ -76,24 +87,12 @@ void mostrar_menu(Estadisticas Resultado){
             string genero=combinacion.first.second;
             vector<int> edades = combinacion.second;
             float suma=0;
-            float menor18=0;
-            float menor38=0;
-            float menor60=0;
-            float mayor60=0;
-            //cout<<"Para la especie "<<especie<<", "<<genero<<" la edad media y la mediana es:";
             int max=edades.size();
             for (int i=0; i < max;i++){
+
                 suma+=edades[i];
-                if(edades[i]<18)
-                    menor18+=1;
-                else if(edades[i]<38)
-                    menor38+=1;
-                else if(edades[i]<60)
-                    menor60+=1;
-                else
-                    mayor60+=1;
             }
-            sort(edades.begin(), edades.end());
+            cout<<endl;
             float respuesta3=suma/edades.size();
 
             cout<<"La edad promedio de la especie "<<especie<<", "<<genero<<" es: "<<respuesta3<<endl;
@@ -102,17 +101,14 @@ void mostrar_menu(Estadisticas Resultado){
         break;
     case 4:
         cout<<"Presionaste el numero cuatro\n";
-        //respuesta 3,4,5
 
         for (const auto& combinacion : Resultado.Edades)
         {
             string especie=combinacion.first.first;
             string genero=combinacion.first.second;
             vector<int> edades = combinacion.second;
-            //cout<<"Para la especie "<<especie<<", "<<genero<<" la edad media y la mediana es:";
             sort(edades.begin(), edades.end());
-            float respuesta4=edades[edades.size()/2];
-            //cout<<"Adicionalmente la propoción de menor de 18, entre 18-38, entre 38 y 60, y mayor de 60 anios es respectivamente:"<<endl;
+            int respuesta4=edades[(edades.size())/2];
 
             cout<<"La edad mediana de la especie "<<especie<<", "<<genero<<" es: "<<respuesta4<<endl;
         }
@@ -181,16 +177,21 @@ void mostrar_menu(Estadisticas Resultado){
                     edad[9]++;
 
             }
-            for (int i =0;i <edad.size();i++)
-                edad[i]=edad[i]/edad.size();
+            max=edad.size();
+            for (int i =0;i < max ;i++)
+                edad[i]=edad[i]/edades.size();
             cout<<"Para la especie "<<especie<<", "<<genero<<" el rango edad es:"<<endl;
-            for(int i =0;i<edad.size();i++)
+            for(int i =0;i<max;i++)
             {
                 if(i!=9)
                 cout<<" ";
                 cout<<i<<"-"<<(i+1)*10<<":";
-                for(int j=0;j<edad[i];j++)
-                    cout<<"#";
+                cout<<"     ";
+                for(int j=1;j<=(max*2);j++)
+                    if(j>10-edad[i]*10 && j<10+edad[i]*10)
+                        cout<<"#";
+                    else
+                        cout<<" ";
                 cout<<endl;
             }
             cout<<endl<<endl;
@@ -199,7 +200,6 @@ void mostrar_menu(Estadisticas Resultado){
         break;
     case 7:
         cout<<"Presionaste el numero siete\n";
-        //respuesta 7
         
 
         for (const auto& combinacion : Resultado.Edades)
@@ -220,6 +220,21 @@ void mostrar_menu(Estadisticas Resultado){
         break;
     case 8:
         cout<<"Presionaste el numero ocho\n";
+        for (const auto& par : Resultado.viajes){
+            pares.push_back(par);
+        }
+        sort(pares.begin(), pares.end(),[](const pair<string, int>& a, const pair<string, int>& b) {
+            if (a.second != b.second) {
+                return a.second > b.second;
+            }
+            return a.first < b.first;
+            });
+        cout<<"Los 10.000 ciudades que tienen mas viajes son:"<<endl;
+        j = pares.size();
+        for (int i=0;i<10000 && i<j;i++)
+        {
+            cout<<"Hacia "<<pares[i].first<<" son "<<pares[i].second<<" viajes."<<endl;
+        }
         goto regresar;
         break;
     case 9:
@@ -234,56 +249,32 @@ void mostrar_menu(Estadisticas Resultado){
     }
 }
 
-// Función para obtener la fecha y hora actual desglosada
 vector <int> obtenerFechaHoraActualDesglosada() {
-    auto now_time_point = std::chrono::system_clock::now();
-
-    std::time_t tiempo_actual_t = std::chrono::system_clock::to_time_t(now_time_point);
-
-    std::tm* tm_info = std::localtime(&tiempo_actual_t);
-
+    auto now_time_point = chrono::system_clock::now();
+    time_t tiempo_actual_t = chrono::system_clock::to_time_t(now_time_point);
+    tm* tm_info = localtime(&tiempo_actual_t);
     if (tm_info == nullptr) {
-        throw std::runtime_error("Error al obtener la fecha y hora local. (std::localtime fallo)");
+        throw runtime_error("Error al obtener la fecha y hora local. (localtime fallo)");
     }
-
     int anio = tm_info->tm_year + 1900;
-    int mes = tm_info->tm_mon + 1;     
-    int dia = tm_info->tm_mday;        
-    int hora = tm_info->tm_hour;       
-    int minuto = tm_info->tm_min;      
-    int segundo = tm_info->tm_sec;     
-
-    return {anio,mes,dia,hora,minuto,segundo};
+    int mes = tm_info->tm_mon + 1;
+    int dia = tm_info->tm_mday;
+    return {anio,mes,dia};
 }
 
-// Parsea una cadena de fecha y hora en formato ISO 8601 (YYYY-MM-DDTHH:MM:SS) a un vector de enteros
-// que contiene el año, mes, día, hora, minuto y segundo.
-vector<int> obtenerfecha(string& fecha_str) {
-    tm tm_info = {}; 
+vector<int> obtenerfecha(const string& fecha_str) {
+    tm tm_info = {};
     stringstream ss(fecha_str);
-
-    ss >> std::get_time(&tm_info, "%Y-%m-%dT%H:%M:%S");
-
+    ss >> get_time(&tm_info, "%Y-%m-%dT%H:%M:%S");
     if (ss.fail()) {
-        throw std::runtime_error("Error al parsear la cadena de fecha y hora: Formato incorrecto o fecha invalida.");
+        throw runtime_error("Error al parsear la cadena de fecha y hora: Formato incorrecto o fecha invalida.");
     }
-
-    
-    int anio = tm_info.tm_year; 
-    if (anio < 1900) { 
-        anio += 1900;
-    }
-    
-    int mes = tm_info.tm_mon + 1; 
+    int anio = tm_info.tm_year + 1900;
+    int mes = tm_info.tm_mon + 1;
     int dia = tm_info.tm_mday;
-    int hora = tm_info.tm_hour;
-    int minuto = tm_info.tm_min;
-    int segundo = tm_info.tm_sec;
-
-    return {anio,mes,dia,hora,minuto,segundo};
+    return {anio,mes,dia};
 }
 
-// Obtiene el tamaño en bytes de un archivo dado su ruta
 size_t obtenerTamanoArchivo(const string& rutaArchivo) {
     ifstream archivo(rutaArchivo, ios::binary | ios::ate);
     if (!archivo) {
@@ -293,37 +284,14 @@ size_t obtenerTamanoArchivo(const string& rutaArchivo) {
     return static_cast<size_t>(archivo.tellg());
 }
 
-// Devuelve la cantidad de hilos disponibles en el sistema
-unsigned int obtenerCantidadHilos() {
-    unsigned int n = thread::hardware_concurrency();
-    return (n == 0) ? 2 : n; // Si no se detecta, usar 2 por defecto
-}
-
-// Calcula el tamaño de cada bloque para la lectura paralela
-size_t calcularTamanoBloque(size_t tamanoArchivo, unsigned int numHilos) {
-    return tamanoArchivo / numHilos;
-}
-/** 
- * Parsea una línea del CSV y la convierte en un struct Registro.
- * Se asume que los campos están entre comillas y separados por ';'
- * Ejemplo de línea: "123";"Perro";"Macho";"Fido";"Gomez";"2010-01-01";"1000";"2000"
-*/
-
 int edad(vector<int> hoy, vector<int> nacimiento){
-    bool cumple=true;
-    if (hoy[1]>nacimiento[1])
+    bool cumple = true;
+    if (hoy[1]<nacimiento[1])
         cumple = false;
-    else if (hoy[1]==nacimiento[1] && hoy[2]>nacimiento[2])
-        cumple = false;
-    else if (hoy[2]==nacimiento[2] && hoy[3]>nacimiento[3])
-        cumple = false;
-    else if (hoy[3]==nacimiento[3] && hoy[4]>nacimiento[4])
-        cumple = false;
-    else if (hoy[5]>nacimiento[5])
+    else if (hoy[2]<nacimiento[2])
         cumple = false;
     
-    return (cumple)? hoy[0]-nacimiento[0]:hoy[0] -nacimiento[0]-1;
-
+    return (cumple || hoy[0]==nacimiento[0]) ? hoy[0] - nacimiento[0] : hoy[0] - nacimiento[0] - 1;
 }
 
 string aMayusculas(string s) {
@@ -331,116 +299,132 @@ string aMayusculas(string s) {
     return s;
 }
 
-void parsearLineaCSV(const string& linea, Estadisticas& Resultado) {
-
+void parsearLineaCSV(const string& linea, Estadisticas& resultado_local) {
     size_t inicio = 0, fin = 0;
     string campos[8];
     int campoActual = 0;
 
     while (campoActual < 8 && inicio < linea.size()) {
-        // Buscar la primera comilla
         inicio = linea.find('"', fin);
-        if (inicio == string::npos) break;
-        // Buscar la segunda comilla
+        if (inicio == string::npos) break; 
         fin = linea.find('"', inicio + 1);
-        if (fin == string::npos) break;
-        // Extraer el campo entre comillas
+        if (fin == string::npos) break; 
         campos[campoActual++] = linea.substr(inicio + 1, fin - inicio - 1);
-        // Avanzar al siguiente separador
         fin = linea.find(';', fin);
         if (fin == string::npos) fin = linea.size();
     }
-    campos[1]=aMayusculas(campos[1]);
-    campos[2]=aMayusculas(campos[2]);
 
-    lock_guard<mutex> lock(Bloqueo);
-    Resultado.Estrato[int(campos[6][0])-48]+=1;
-    Resultado.Edades[{campos[1],campos[2]}].push_back(edad(Hoy,obtenerfecha(campos[5])));
+    if (campoActual < 8) {
+        return;
+    }
+    string especie = aMayusculas(campos[1]);
+    string genero = aMayusculas(campos[2]);
+    string ciudad_destino = campos[7];
 
+    if (!campos[6].empty() && isdigit(campos[6][0])) {
+        resultado_local.Estrato[int(campos[6][0])-48]++;
+    }
 
+    try {
+        resultado_local.Edades[{especie, genero}].push_back(edad(Hoy,obtenerfecha(campos[5])));
+    } catch (const runtime_error& e) {
+    }
+
+    resultado_local.viajes[ciudad_destino]++; 
+    resultado_local.total++; 
 }
 
-void procesarBloque(const string& rutaArchivo, size_t inicio, size_t fin, Estadisticas& Resultado, bool esPrimerHilo) {
+
+void procesarBloqueOMP(const string& rutaArchivo, long long inicio_bloque, long long fin_bloque, Estadisticas& resultado_local, bool esPrimerHilo) {
     ifstream archivo(rutaArchivo, ios::binary);
     if (!archivo) {
-        cerr << "No se pudo abrir el archivo en el hilo." << endl;
+        cerr << "No se pudo abrir el archivo en el hilo OMP." << endl;
         return;
     }
 
-    archivo.seekg(inicio);
-
-    // Si es el primer hilo, saltar encabezado
-    if (esPrimerHilo) {
-        string encabezado;
-        getline(archivo, encabezado);
-    } else if (inicio != 0) {
-        // Retrocede un byte para ver si está justo después de un salto de línea
-        archivo.seekg(inicio - 1);
-        char c;
-        archivo.get(c);
-        if (c != '\n' && c != '\r') {
-            // Si no está al inicio de línea, descarta la línea incompleta
-            string dummy;
-            getline(archivo, dummy);
-        }
-    }
-
+    archivo.seekg(inicio_bloque);
+    
     string linea;
-    size_t posActual = archivo.tellg();
-
-    while (posActual < fin && getline(archivo, linea)) {
-        if (linea.empty()) continue;
-        parsearLineaCSV(linea,ref(Resultado));
+    long long posActual; 
+    if (inicio_bloque == 0 && esPrimerHilo) {
+        string dummy;
+        getline(archivo, dummy);
+    }
+    while (getline(archivo, linea)) {
         posActual = archivo.tellg();
-        if (archivo.eof()) break;
+
+        if (posActual >= fin_bloque && fin_bloque != static_cast<long long>(obtenerTamanoArchivo(rutaArchivo))) {
+            if (linea.empty()==false)
+                parsearLineaCSV(linea, resultado_local);
+            break;
+        }
+
+        if (linea.empty()){ 
+            continue;
+        }
+        parsearLineaCSV(linea, resultado_local);
     }
+    archivo.close();
 }
- 
+
+
 void leer_csv(string rutaArchivo){
-    Hoy=obtenerFechaHoraActualDesglosada();
-    // Mostrar el directorio actual
-    //cout << "Directorio actual: " << std::filesystem::current_path() << endl;
-
-    // Obtener tamaño del archivo
+    Hoy = obtenerFechaHoraActualDesglosada();
     size_t tamano = obtenerTamanoArchivo(rutaArchivo);
-    if (tamano == 0) return;
-    //cout << "Tamano del archivo: " << tamano << " bytes" << endl;
-
-    // Obtener cantidad de hilos
-    unsigned int num_hilos = obtenerCantidadHilos();
-    //cout << "Cantidad de hilos detectados: " << num_hilos << endl;
-
-    // Calcular tamaño de bloque
-    size_t tamano_bloque = calcularTamanoBloque(tamano, num_hilos);
-    //cout << "Tamano de cada bloque: " << tamano_bloque << " bytes" << endl;
-
-    // 1. Vector para los hilos y para los registros de cada hilo
-    vector<thread> hilos;
-    // vector<vector<Registro>> registros_por_hilo(num_hilos);
-    Estadisticas Resultado;
-    // 2. Lanzar los hilos
-    for (unsigned int i = 0; i < num_hilos; ++i) {
-        size_t inicio = i * tamano_bloque;
-        size_t fin = (i == num_hilos - 1) ? tamano : (inicio + tamano_bloque);
-        bool esPrimerHilo = (i == 0);
-        hilos.emplace_back(procesarBloque, rutaArchivo, inicio, fin, ref(Resultado), esPrimerHilo); //ref(registros_por_hilo[i])
+    if (tamano == 0) {
+        cerr << "El archivo está vacío o no se pudo abrir." << endl;
+        return;
     }
 
-    // 3. Esperar a que todos los hilos terminen
-    for (auto& h : hilos) {
-        h.join();
+    int num_hilos = omp_get_max_threads(); 
+
+    cout << "Cantidad de hilos a usar: " << num_hilos << endl;
+
+    long long tamano_bloque = tamano / num_hilos;
+
+
+    Estadisticas ResultadoFinal; 
+
+    #pragma omp parallel
+    {
+        Estadisticas resultado_local; 
+
+        int thread_id = omp_get_thread_num();
+        long long inicio_bloque_hilo = thread_id * tamano_bloque;
+        long long fin_bloque_hilo = (thread_id == num_hilos - 1) ? tamano : (inicio_bloque_hilo + tamano_bloque);
+
+        if (thread_id != 0) {
+            ifstream temp_file_finder(rutaArchivo, ios::binary);
+            temp_file_finder.seekg(inicio_bloque_hilo);
+            string dummy;
+            getline(temp_file_finder, dummy);
+            inicio_bloque_hilo = temp_file_finder.tellg();
+            temp_file_finder.close();
+        }
+        procesarBloqueOMP(rutaArchivo, inicio_bloque_hilo, fin_bloque_hilo, resultado_local, (thread_id == 0));
+
+        #pragma omp critical
+        {
+            ResultadoFinal.merge(resultado_local);
+        }
+    } 
+
+    for(int count : ResultadoFinal.Estrato) {
+        ResultadoFinal.total += count;
     }
-
-    for(int i=0;i<10;i++)
-        Resultado.total+= Resultado.Estrato[i];
-
-    mostrar_menu(Resultado);
+    
+    mostrar_menu(ResultadoFinal);
 }
 
 
 int main() {
-    string rutaArchivo = "E:/Proyectos/ProyectoParalelo/datos_prueba.csv";
+    string rutaArchivo = "./eldoria.csv";
+    auto start_time = chrono::high_resolution_clock::now();
     leer_csv(rutaArchivo);
-    system("pause");
+
+    auto end_time = chrono::high_resolution_clock::now();
+    auto duration = chrono::duration_cast<chrono::milliseconds>(end_time - start_time);
+    cout << "\nTiempo total de ejecución: " << duration.count() / 1000.0 << " segundos." << endl;
+
     return 0;
 }
